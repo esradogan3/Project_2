@@ -1,0 +1,36 @@
+---
+title: "Project 2 — Data Tidying: Business Costs and Revenue"
+author: "Esra Dogan"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: flatly
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+---
+
+## Introduction
+
+This is one of the three datasets for Project 2. In this file, I will tidy Jocelyn's Business Costs and Revenue dataset from 5A discussion posts. I will decide the tidying steps myself, based on what makes the data messy, and then use the analysis ideas Jocelyn suggested in her post.
+
+## Source and Requested Analysis
+
+This dataset is a CSV file that Jocelyn created, with monthly costs and revenues for five people in different US cities from January to June. She suggested calculating profits, plotting monthly trends by region, and looking at the national totals over the six months.
+
+## Data Structure
+
+The data is wide because each month has its own cost and revenue columns, like "Jan Cost" and "Jan Revenue". In the tidy version, each row will show one location in one month, with location, name, month, cost, and revenue. I will keep cost and revenue as separate columns so I can easily calculate profit in each row.
+
+## Planned Approach
+
+First, I will upload Jocelyn's CSV file to GitHub as it is, in its original wide format, and read it into R from there. Next, I will clean the column names so they all follow the same format. Because each column name holds two pieces of information, the month and whether it is a cost or a revenue, one pivot_longer() is not enough. So I will use pivot_longer(), split the name into month and measure, and then use pivot_wider() to turn cost and revenue back into their own columns. After that, I will fix the number formats and units.
+
+Once the data is tidy, I will calculate profit for each row, plot the monthly trends by location, and add up the costs, revenues, and profits for all locations. I will use summary tables and ggplot2 charts, and end with a conclusion.
+
+## Anticipated Challenges
+
+The column names are inconsistent in three ways: different capital letters ("May Cost" and "may revenue"), underscores instead of spaces ("April_Cost"), and short and full month names ("Jan" and "March"). There is also an extra space after "Name". The February and March costs are written in thousands (k), so I will multiply them by 1,000, and some January costs are stored as text with commas, like "29,000", so I will change them to numbers. Boston's May revenue is 6,150,000, which looks like a typo, so I will need to fix it or leave it out and explain my choice.

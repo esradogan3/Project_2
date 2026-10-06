@@ -1,0 +1,36 @@
+---
+title: "Project 2 — Data Tidying: GDP per Capita"
+author: "Esra Dogan"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: flatly
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+---
+
+## Introduction
+
+This is one of the three datasets for Project 2. In this file, I will tidy my own GDP per capita dataset, which I shared in the 5A discussion posts.
+
+## Source and Requested Analysis
+
+This dataset is the GDP per capita (current US$) data from the World Bank (<https://data.worldbank.org/indicator/NY.GDP.PCAP.CD>), which I downloaded as a CSV file. It shows GDP per capita for countries and regions from 1960 to 2025. I suggested comparing how GDP per capita has changed over time in different countries and finding which countries had the fastest growth in recent years.
+
+## Data Structure
+
+The data is wide because each year from 1960 to 2025 has its own column. In the tidy version, each row will show one country in one year, with country, year, and GDP per capita.
+
+## Planned Approach
+
+First, I will upload the World Bank CSV file to GitHub as it is, in its original wide format, and read it into R from there with skip = 4. Next, I will remove the empty column at the end and the rows for regions and groups, and use one pivot_longer() to put all the years into a single year column. I will also rename the columns in one consistent style and change the year to a number.
+
+Once the data is tidy, I will compare how GDP per capita changed over time in different countries and calculate which countries grew the fastest in recent years. I will use summary tables and ggplot2 charts with clear titles and labels, and end with a conclusion that refers to specific values.
+
+## Anticipated Challenges
+
+The file has metadata lines at the top, so reading it without skip = 4 gives an error, and there is an empty column at the end. The rows mix countries with regions and groups like "Euro area" or "World", so I will remove these and keep only countries. Many countries also have missing values in the early years; for example, Aruba has no values before 1986. I will keep these as NA instead of replacing them with 0, and to compare growth fairly, I will use a time range where most countries have data, even though this means leaving out some early years.

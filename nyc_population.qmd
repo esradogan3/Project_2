@@ -1,0 +1,36 @@
+---
+title: "Project 2 — Data Tidying: NYC Population by Borough"
+author: "Esra Dogan"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: flatly
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+---
+
+## Introduction
+
+This is one of the three datasets for Project 2. In this file, I will tidy Muntasir's NYC Population dataset from 5A discussion posts. I will decide the tidying steps myself, based on what makes the data messy, and then use the analysis ideas Muntasir suggested in his post.
+
+## Source and Requested Analysis
+
+This dataset is a table from the NYC Department of City Planning's population projections report, which Muntasir shared. It shows the population of NYC and its five boroughs in 2010, 2020, 2030, and 2040. He suggested looking at the population of each borough and how it changes over time.
+
+## Data Structure
+
+The data is wide because each year has its own column. In the tidy version, each row will show one borough in one year, with borough, year, and population.
+
+## Planned Approach
+
+First, I will copy the full table from the PDF into a CSV file with a help from LLM, keeping its original wide format, including the NYC total row and the change columns. I will upload this file to GitHub and read it into R from there. Next, I will remove the NYC total row and the change columns, and use one pivot_longer() to put all the years into a single year column. I will also rename the columns in one consistent style and convert the numbers to numeric.
+
+Once the data is tidy, I will compare the population of the five boroughs and calculate how much each one changes over time. I will use summary tables and ggplot2 charts with clear titles and labels, and end with a conclusion that refers to specific values.
+
+## Anticipated Challenges
+
+The "NYC" row is a total, not a borough, so I will remove it. The change columns (number and percent) have a two-level header and are calculated from the other values, so I will drop them and calculate the changes myself from the tidy data. The numbers have commas, so I will convert them to numeric. Also, the values for 2020, 2030, and 2040 are projections, not real counts, so I will mention this when explaining the results.
