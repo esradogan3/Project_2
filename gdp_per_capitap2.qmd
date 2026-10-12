@@ -1,0 +1,271 @@
+---
+title: "Project 2 — Data Tidying: GDP per Capita"
+author: "Esra Dogan"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: flatly
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+---
+
+## Introduction
+
+This is one of the three datasets for Project 2. In this file, I will tidy my own GDP per capita dataset, which I shared in the 5A discussion posts. I will decide the tidying steps myself, based on what makes the data messy, and then use the analysis ideas I suggested in my post.
+
+## Source and Requested Analysis
+
+This dataset is the GDP per capita (current US\$) data from the World Bank (<https://data.worldbank.org/indicator/NY.GDP.PCAP.CD>), which I downloaded as a CSV file. It shows GDP per capita for countries and regions from 1960 to 2025. I suggested comparing how GDP per capita has changed over time in different countries and regions and finding which countries had the fastest growth in recent years.
+
+## Data Structure
+
+The data is wide because each year from 1960 to 2025 has its own column. In the tidy version, each row will show one country in one year, with country, year, and GDP per capita.
+
+## Planned Approach
+
+First, I will upload the World Bank CSV file to GitHub as it is, in its original wide format, and read it into R from there with skip = 4. Next, I will remove the empty column at the end, move the rows for regions and groups into a separate table, and use one pivot_longer() to put all the years into a single year column. I will also rename the columns in one consistent style and change the year to a number.
+
+Once the data is tidy, I will compare how GDP per capita changed over time in different countries, calculate which countries grew the fastest in recent years, and compare a few regions and income groups. I will use summary tables and ggplot2 charts with clear titles and labels, and end with a conclusion that refers to specific values.
+
+## Anticipated Challenges
+
+The file has metadata lines at the top, so reading it without skip = 4 gives an error, and there is an empty column at the end. The rows mix countries with regions and groups like "Euro area" or "World", so I will move these into a separate table and keep only countries in the main table. Many countries also have missing values in the early years; for example, Aruba has no values before 1986. I will keep these as NA instead of replacing them with 0, and to compare growth fairly, I will use a time range where most countries have data, even though this means leaving out some early years.
+
+## Tidying the Data
+
+### Loading the packages
+
+```{r}
+library(tidyverse)
+```
+
+### Reading CSV
+
+```{r}
+gdp_raw <- read.csv(
+  "https://raw.githubusercontent.com/esradogan3/Project_2/refs/heads/main/API_NY.GDP.PCAP.CD_DS2_en_csv_v2_429627.csv",
+  skip = 4
+)
+
+# Structure before tidying
+dim(gdp_raw)                 # rows and columns
+names(gdp_raw)[1:8]          # first column names
+tail(names(gdp_raw), 3)      # last column names
+head(gdp_raw[, 1:8])         # representative sample
+```
+
+I read the raw CSV file from my GitHub repository. The first four lines of the file are metadata (the data source and the update date), so I used skip = 4 to start reading at the real header. The raw data has 265 rows and 71 columns. Because the year columns start with numbers, read.csv() added an "X" in front of them (X1960, X1961, and so on), and the empty column at the end of every line became a column called X.
+
+### Separating regions and groups
+
+The World Bank file mixes 217 countries with 48 regions and groups, such as "World", "Euro area", and "High income". These groups are sums or averages of countries, so if I kept them together with the countries, the same people would be counted twice. Instead of deleting them, I will move them into a separate table so I can still compare them. To make this list, I used an LLM (Claude) to go through all 265 names in the file and pick the ones that are regions or groups instead of countries. I then checked the list myself: it has 48 codes, and the remaining 217 rows are all countries.
+
+```{r}
+aggregate_codes <- c(
+  "AFE", "AFW", "ARB", "CEB", "CSS", "EAP", "EAR", "EAS", "ECA", "ECS",
+  "EMU", "EUU", "HIC", "HPC", "IBD", "IBT", "IDA", "IDB", "IDX", "INX",
+  "LAC", "LCN", "LDC", "LIC", "LMC", "LMY", "LTE", "MEA", "MIC", "MNA",
+  "NAC", "OED", "OSS", "PRE", "PSS", "PST", "SAS", "SSA", "SSF", "SST",
+  "TEA", "TEC", "TLA", "TMN", "TSA", "TSS", "UMC", "WLD"
+)
+
+# Check: these are the rows I will move to the regions table
+gdp_raw |>
+  filter(Country.Code %in% aggregate_codes) |>
+  select(Country.Code, Country.Name) |>
+  head(10)
+```
+
+### Tidy Format
+
+```{r}
+gdp_long <- gdp_raw |>
+  # Remove the empty last column and the two columns that are the same in every row
+  select(-X, -Indicator.Name, -Indicator.Code) |>
+  # Rename the columns in one consistent lowercase style
+  rename(
+    country = Country.Name,
+    country_code = Country.Code
+  ) |>
+  # Put all the year columns into one year column
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "year",
+    names_prefix = "X",
+    values_to = "gdp_per_capita"
+  ) |>
+  # Change year to a number
+  mutate(year = as.integer(year))
+
+# Split into countries and regions/groups
+gdp_tidy <- gdp_long |>
+  filter(!country_code %in% aggregate_codes)
+
+gdp_regions <- gdp_long |>
+  filter(country_code %in% aggregate_codes) |>
+  rename(region = country, region_code = country_code)
+
+gdp_tidy
+gdp_regions
+```
+
+I removed the empty column at the end, and also the Indicator.Name and Indicator.Code columns, because they have the same value ("GDP per capita (current US\$)") in every row. I renamed the columns to country and country_code so that all names follow the same lowercase style, and moved the 48 regions and groups into a separate table called gdp_regions. Since each year column holds only one piece of information, the year, one pivot_longer() was enough. I used names_prefix = "X" to remove the "X" that read.csv() added, and then changed year to an integer.
+
+### Checking missing and inconsistent values
+
+```{r}
+# Size of the tidy data: 217 countries x 66 years
+n_distinct(gdp_tidy$country)
+nrow(gdp_tidy)
+
+# Total number of missing values
+sum(is.na(gdp_tidy$gdp_per_capita))
+
+# Number of countries with data in selected years
+gdp_tidy |>
+  filter(year %in% c(1960, 1990, 2015, 2024, 2025)) |>
+  group_by(year) |>
+  summarise(countries_with_data = sum(!is.na(gdp_per_capita)))
+
+# Example: the first year with data for Aruba
+gdp_tidy |>
+  filter(country == "Aruba", !is.na(gdp_per_capita)) |>
+  slice_min(year)
+```
+
+There are 2,558 missing values out of 14,322 rows. Most of them are in the early years: only 111 countries have data in 1960, but 212 have data in 2015. Aruba, for example, has no values before 1986. I kept these as NA instead of replacing them with 0, because 0 would mean a country had no income at all, which is not true. The year 2025 also has fewer countries (186) than 2024 (200), because some countries have not reported yet.
+
+```{r}
+# One country name is written in a different language
+gdp_tidy |>
+  filter(country_code == "NRU") |>
+  distinct(country, country_code)
+
+gdp_tidy <- gdp_tidy |>
+  mutate(country = recode(country, "Naoero" = "Nauru"))
+```
+
+I also found one inconsistent country name: Nauru is written as "Naoero", its name in the Nauruan language, while all other countries use English names. I changed it to "Nauru".
+
+## Analysis
+
+### GDP per capita over time in selected countries
+
+```{r}
+selected <- c("United States", "Germany", "Japan", "Turkiye", "China", "Brazil", "India")
+
+gdp_tidy |>
+  filter(country %in% selected, !is.na(gdp_per_capita)) |>
+  ggplot(aes(x = year, y = gdp_per_capita, color = country)) +
+  geom_line() +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    title = "GDP per Capita in Selected Countries (1960–2025)",
+    x = "Year",
+    y = "GDP per capita (current US$, log scale)",
+    color = "Country"
+  )
+```
+
+I chose seven large economies from different parts of the world. I used a log scale on the y axis because the values range from under 100 USD to over 90,000 USD; on a normal scale, China and India would look like flat lines at the bottom.
+
+```{r}
+gdp_tidy |>
+  filter(country %in% selected, year %in% c(1960, 2000, 2015, 2024)) |>
+  select(country, year, gdp_per_capita) |>
+  mutate(gdp_per_capita = round(gdp_per_capita)) |>
+  pivot_wider(names_from = year, values_from = gdp_per_capita, names_prefix = "usd_") |>
+  arrange(desc(usd_2024))
+```
+
+This table shows the GDP per capita (in current USD) of the selected countries in four years.
+
+### Fastest growth in recent years (2015–2024)
+
+```{r}
+gdp_growth <- gdp_tidy |>
+  filter(year %in% c(2015, 2024)) |>
+  select(country, year, gdp_per_capita) |>
+  pivot_wider(names_from = year, values_from = gdp_per_capita, names_prefix = "usd_") |>
+  # Keep only countries with data in both years
+  drop_na() |>
+  mutate(growth_pct = round((usd_2024 - usd_2015) / usd_2015 * 100, 1))
+
+# Number of countries in the comparison
+nrow(gdp_growth)
+
+# Top 10 fastest-growing countries
+top_10 <- gdp_growth |>
+  slice_max(growth_pct, n = 10)
+
+top_10
+
+# 5 countries with the largest decline
+gdp_growth |>
+  slice_min(growth_pct, n = 5)
+
+ggplot(top_10, aes(x = reorder(country, growth_pct), y = growth_pct)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Countries by GDP per Capita Growth (2015–2024)",
+    x = "Country",
+    y = "Growth in GDP per capita (%)"
+  )
+```
+
+I compared 2015 and 2024 because these are recent years where most countries have data. I did not use 2025, because 14 fewer countries have data for it. I kept only countries with values in both years (200 countries), and calculated the percent change for each one.
+
+### Comparing regions and groups
+
+```{r}
+gdp_regions |>
+  filter(region %in% c("World", "Euro area", "High income", "Low income", "Sub-Saharan Africa"),
+         !is.na(gdp_per_capita)) |>
+  ggplot(aes(x = year, y = gdp_per_capita, color = region)) +
+  geom_line() +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    title = "GDP per Capita in Selected Regions and Groups (1960-2025)",
+    x = "Year",
+    y = "GDP per capita (current USD, log scale)",
+    color = "Region or group"
+  )
+
+gdp_regions |>
+  filter(region %in% c("World", "Euro area", "High income", "Low income", "Sub-Saharan Africa"),
+         year %in% c(2000, 2024)) |>
+  select(region, year, gdp_per_capita) |>
+  mutate(gdp_per_capita = round(gdp_per_capita)) |>
+  pivot_wider(names_from = year, values_from = gdp_per_capita, names_prefix = "usd_")
+```
+
+I compared the world average with a few regions and income groups. In 2024, GDP per capita was 13,717 USD for the world, 46,424 USD for the Euro area, and 50,907 USD for high-income countries, but only 809 USD for low-income countries. This means the average person in a high-income country produced about 63 times more than in a low-income country.
+
+## Conclusion
+
+All seven selected countries had higher GDP per capita in 2024 than in 1960. The United States grew from 3,000 USD to 86,170 USD, and China from 90 USD to 13,293 USD. Japan was the exception in recent years: it dropped from 39,753 USD in 2000 to 33,797 USD in 2024.
+
+From 2015 to 2024, Guyana grew the fastest (426.1%), and Nigeria had the biggest drop (-58.1%). These changes have different causes. Guyana started producing oil at the end of 2019, and its economy grew very quickly after that. Nigeria's drop does not mean its economy became half as big. In June 2023, Nigeria let its currency, the naira, float freely, and the naira lost a large part of its value against the dollar. Because this data is in current US dollars, a weaker currency makes GDP per capita look much smaller, even if the economy itself did not shrink that much.
+
+The region comparison shows a large gap between rich and poor countries: in 2024, GDP per capita in high-income countries (50,907 USD) was about 63 times higher than in low-income countries (809 USD).
+
+The values are not adjusted for inflation, and many countries have missing data in the early years, so I used 2015-2024 for the growth comparison.
+
+## Use of LLM
+
+I used Claude (Anthropic) to help me write and debug the R code for this file and to help draft some of the written explanations. I ran all code myself, and the numbers in this file come from my own output.
+
+## References
+
+Anthropic. (2026). *Claude* (Opus 5.5 version) \[Large language model\]. <https://claude.ai>
+
+World Bank. (2026). *GDP per capita (current US\$)* \[Data set\]. World Development Indicators. <https://data.worldbank.org/indicator/NY.GDP.PCAP.CD>
+
+U.S. Energy Information Administration. (2024). *Country analysis brief: Guyana*. <https://www.eia.gov/international/content/analysis/countries_long/Guyana/pdf/Guyana%202024%20CAB.pdf>
+
+Nairametrics. (2023, June 14). *Exchange rate closes at N646*. <https://nairametrics.com/2023/06/14/exchange-rate-closes-at-n646>
