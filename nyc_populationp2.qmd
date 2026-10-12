@@ -1,0 +1,193 @@
+---
+title: "Project 2 — Data Tidying: NYC Population by Borough"
+author: "Esra Dogan"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: flatly
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+---
+
+## Introduction
+
+This is one of the three datasets for Project 2. In this file, I will tidy Muntasir's NYC Population dataset from the 5A discussion posts. I will decide the tidying steps myself, based on what makes the data messy, and then use the analysis ideas Muntasir suggested in his post.
+
+## Source and Requested Analysis
+
+This dataset is a table from the NYC Department of City Planning's population projections report, which Muntasir shared. It shows the population of NYC and its five boroughs in 2010, 2020, 2030, and 2040. He suggested looking at the population of each borough and how it changes over time.
+
+![Original table from the NYC Department of City Planning report](images/first_version.png)
+
+This is the original table from the PDF. The first column has no header, and the change columns have a three-level header: "CHANGE" on top, the period (for example, "2010-2020") in the middle, and "Number" and "Percent" at the bottom. A CSV file cannot store this kind of header, so when I created the CSV, I named the first column borough and combined the three levels into single lowercase names like dif_2010to2020 and per_dif_2010to2020. This was my renaming step. I did not change any values, so the CSV still contains all the original information in its wide format.
+
+## Data Structure
+
+The data is wide because each year has its own column. In the tidy version, each row will show one borough in one year, with borough, year, and population.
+
+## Planned Approach
+
+First, I will copy the full table from the PDF into a CSV file with the help of an LLM, keeping its original wide format, including the NYC total row and the change columns. I will upload this file to GitHub and read it into R from there. Next, I will remove the NYC total row and the change columns, and use one pivot_longer() to put all the years into a single year column.
+
+Once the data is tidy, I will compare the population of the five boroughs and calculate how much each one changes over time. I will use summary tables and ggplot2 charts with clear titles and labels, and end with a conclusion that refers to specific values.
+
+## Anticipated Challenges
+
+The "NYC" row is a total, not a borough, so I will remove it. To create the CSV file, I had to make a few changes to the original table. As shown above, the change columns had a three-level header, which a CSV file cannot store, so I combined the levels into single column names. Because of this, the CSV is a little less messy than the original table. These change columns are calculated from the population values, so I will drop them and calculate the changes myself from the tidy data. The numbers have commas, so I will convert them to numeric. Also, the values for 2020, 2030, and 2040 are projections, not real counts, so I will mention this when explaining the results.
+
+## Tidying the Data
+
+### Loading the packages
+
+```{r}
+library(tidyverse)
+```
+
+### Reading CSV
+
+```{r}
+nyc_raw <- read.csv(
+  "https://raw.githubusercontent.com/esradogan3/Project_2/refs/heads/main/nyc_population.csv",
+  check.names = FALSE
+)
+
+names(nyc_raw)
+nrow(nyc_raw)
+head(nyc_raw)
+```
+
+I loaded the tidyverse package, which includes tidyr, dplyr, and ggplot2. Then I read the raw CSV file from my GitHub repository and looked at its column names, number of rows, and first few rows. I used check.names = FALSE because the year columns start with numbers, and by default read.csv() would rename them to X2010, X2020, and so on.
+
+### Checking the CSV
+
+```{r}
+# Sum of the five boroughs for each year
+nyc_raw |>
+  filter(borough != "NYC") |>
+  summarise(across(c(`2010`, `2020`, `2030`, `2040`), ~ sum(parse_number(.x))))
+
+# NYC total row
+nyc_raw |>
+  filter(borough == "NYC") |>
+  select(`2010`, `2020`, `2030`, `2040`)
+```
+
+Since I used an LLM to convert the PDF table into a CSV, I checked that the data was copied correctly. For every year, the five boroughs add up exactly to the NYC row (for example, 8,242,624 in 2010). This shows the values were transferred correctly, and it also confirms that the NYC row is just a total, so I can remove it.
+
+### Tidy Format
+
+```{r}
+nyc_tidy <- nyc_raw |>
+  # Remove the NYC total row, because it is not a borough
+  filter(borough != "NYC") |>
+  # Drop the change columns, because I will calculate changes myself
+  select(-starts_with("dif"), -starts_with("per_dif")) |>
+  # Put all the year columns into one year column
+  pivot_longer(
+    cols = -borough,
+    names_to = "year",
+    values_to = "population"
+  ) |>
+  # Convert year and population to numbers (parse_number removes commas)
+  mutate(
+    year = as.integer(year),
+    population = parse_number(population)
+  )
+
+nyc_tidy
+```
+
+I removed the NYC row because it is a total, not a borough, and dropped the change columns because I will calculate the changes myself. Since each column name holds only one piece of information, the year, one pivot_longer() was enough. Finally, I converted year and population to numbers, since the populations were stored as text with commas. The column names were already consistent from the CSV step, so after pivoting, all columns follow the same lowercase style: borough, year, and population.
+
+### Checking missing values
+
+```{r}
+nyc_tidy |>
+  summarise(across(everything(), ~ sum(is.na(.x))))
+
+nyc_tidy |>
+  count(borough)
+```
+
+There are no missing values, and each borough has exactly four years of data, so no further handling is needed.
+
+## Analysis
+
+### Population of each borough over time
+
+```{r}
+ggplot(nyc_tidy, aes(x = year, y = population, color = borough)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "NYC Population by Borough (2010–2040)",
+    x = "Year",
+    y = "Population (people)",
+    color = "Borough"
+  )
+```
+
+I plotted the population of each borough from 2010 to 2040 to compare their sizes and trends. The values for 2020, 2030, and 2040 are projections, not real counts.
+
+### Population change by borough (2010–2040)
+
+```{r}
+nyc_change <- nyc_tidy |>
+  arrange(year) |>
+  group_by(borough) |>
+  summarise(
+    change = last(population) - first(population),
+    pct_change = round(change / first(population) * 100, 1)
+  )
+
+nyc_change
+```
+
+I calculated how much each borough's population changes from 2010 to 2040, both in number of people (change) and in percent (pct_change). I sorted the rows by year first, so first() always gives the 2010 value and last() always gives the 2040 value.
+
+### Population change by decade
+
+```{r}
+nyc_decade <- nyc_tidy |>
+  arrange(year) |>
+  group_by(borough) |>
+  mutate(
+    change = population - lag(population),
+    pct_change = round(change / lag(population) * 100, 1)
+  ) |>
+  filter(!is.na(change))
+
+nyc_decade
+
+ggplot(nyc_decade, aes(x = factor(year), y = pct_change, fill = borough)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Population Change by Decade and Borough",
+    x = "End of decade",
+    y = "Change from previous decade (%)",
+    fill = "Borough"
+  )
+```
+
+I also calculated the change for each decade, comparing each year with the one before it. Each bar shows the growth in the ten years ending in that year (for example, 2020 means 2010 to 2020).
+
+## Conclusion
+
+All five boroughs are projected to grow between 2010 and 2040. Brooklyn is the largest borough in every year, and it also adds the most people (287,614). However, the Bronx grows the fastest in percent terms (14.0%), followed by Brooklyn (11.3%). Queens (7.2%), Staten Island (6.9%), and Manhattan (6.7%) grow more slowly. Staten Island remains the smallest borough and adds the fewest people (32,379).
+
+The decade view shows that growth slows down over time in most boroughs. For example, Manhattan grows 3.3% from 2010 to 2020 but only 0.9% from 2030 to 2040, and Staten Island drops from 3.9% to 0.7%. The Bronx is the exception: it keeps growing quickly in every decade, between 4.0% and 5.0%. Since the values for 2020, 2030, and 2040 are projections and not real counts, these results show expected trends rather than actual population changes.
+
+## Use of LLM
+
+I used Claude (Anthropic) to help me convert the PDF table into a CSV file, write and debug the R code, and draft some of the written explanations. I ran all code myself, and the numbers in this file come from my own output.
+
+## References
+
+Anthropic. (2026). *Claude* (Opus 5.5 version) \[Large language model\]. <https://claude.ai>
+
+New York City Department of City Planning. (2013). New York City population projections by age/sex and borough, 2010–2040. <https://www.nyc.gov/assets/planning/download/pdf/data-maps/nyc-population/projections_report_2010_2040.pdf>
